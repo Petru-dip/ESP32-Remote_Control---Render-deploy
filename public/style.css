@@ -194,6 +194,8 @@ button.off:hover {
 .history-card canvas {
   width: 100% !important;
   max-height: 320px;
+  /* Pinch/drag pe grafic; scroll pagina se face în afara canvas-ului */
+  touch-action: none;
 }
 
 .hint {

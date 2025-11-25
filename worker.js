@@ -5,6 +5,27 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Favicon served inline (SVG) to avoid 500s when missing asset
+    if (path === "/favicon.ico") {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <defs>
+          <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#1976d2"/>
+            <stop offset="100%" stop-color="#43a047"/>
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="12" fill="#0b1a2c"/>
+        <rect x="18" y="10" width="28" height="44" rx="10" fill="url(#g)" stroke="#e3f2fd" stroke-width="3"/>
+        <line x1="32" y1="18" x2="32" y2="46" stroke="#e3f2fd" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="32" cy="40" r="6" fill="#fff" stroke="#0b1a2c" stroke-width="2"/>
+        <circle cx="32" cy="40" r="3" fill="#f44336"/>
+      </svg>`;
+      return new Response(svg, {
+        status: 200,
+        headers: { "Content-Type": "image/svg+xml" }
+      });
+    }
+
     // 1️⃣ Static files din /public (via [assets])
     if (!path.startsWith("/api/")) {
       return env.ASSETS.fetch(request);
@@ -69,8 +90,8 @@ async function saveHistory(env, temp, relayEsp) {
        VALUES (?, ?, ?)`
   ).bind(now, temp, relayEsp).run();
 
-  // păstrăm doar ultimele 30 de zile ca să nu crească fără limită
-  const retentionMs = 30 * 24 * 60 * 60 * 1000;
+  // păstrăm doar ultimele 8 zile ca să nu crească fără limită
+  const retentionMs = 8 * 24 * 60 * 60 * 1000;
   await env.DB.prepare(
     `DELETE FROM history WHERE ts < ?`
   ).bind(now - retentionMs).run();
@@ -180,26 +201,63 @@ async function browserSetAutoRange(url, env) {
 // Istoric pentru grafice
 async function historyData(url, env) {
   const range = url.searchParams.get("range") ?? "24h";
-  const ranges = {
-    "24h": 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000
-  };
 
-  const windowMs = ranges[range] ?? ranges["24h"];
-  const since = Date.now() - windowMs;
-  const limit = 2000;
+  // 24h: puncte brute pentru zoom/pan
+  if (range === "24h") {
+    const windowStart = Date.now() - 24 * 60 * 60 * 1000;
+    const sinceParam = Number(url.searchParams.get("since"));
+    const effectiveSince = Number.isFinite(sinceParam) ? Math.max(windowStart, sinceParam) : windowStart;
 
+    const res = await env.DB.prepare(
+      `SELECT ts, temp, relay
+         FROM history
+        WHERE ts >= ?
+        ORDER BY ts ASC`
+    ).bind(effectiveSince).all();
+
+    return json({
+      range: "24h",
+      points: res?.results ?? [],
+      cutoff: windowStart,
+      incremental: Number.isFinite(sinceParam)
+    });
+  }
+
+  // 7d: agregare zilnică pentru lumânări (min/max/avg pe zi)
+  if (range === "7d") {
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const res = await env.DB.prepare(
+      `SELECT DATE(ts/1000, 'unixepoch', 'localtime') AS day,
+              MIN(temp) AS minTemp,
+              MAX(temp) AS maxTemp,
+              AVG(temp) AS avgTemp
+         FROM history
+        WHERE ts >= ?
+        GROUP BY day
+        ORDER BY day ASC`
+    ).bind(since).all();
+
+    // transformăm în structura necesară pentru candlestick
+    const candles = (res?.results ?? []).map((row) => ({
+      day: row.day,
+      min: row.minTemp,
+      max: row.maxTemp,
+      avg: row.avgTemp
+    }));
+
+    return json({ range: "7d", candles });
+  }
+
+  // fallback: default la 24h
+  const since = Date.now() - 24 * 60 * 60 * 1000;
   const res = await env.DB.prepare(
     `SELECT ts, temp, relay
        FROM history
       WHERE ts >= ?
-      ORDER BY ts ASC
-      LIMIT ?`
-  ).bind(since, limit).all();
+      ORDER BY ts ASC`
+  ).bind(since).all();
 
-  const points = res?.results ?? [];
-  return json({ range: ranges[range] ? range : "24h", points });
+  return json({ range: "24h", points: res?.results ?? [] });
 }
 
 // helper JSON

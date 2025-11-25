@@ -6,6 +6,7 @@
   <title>BrimTech – ESP32 Remote Control</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -53,12 +54,12 @@
     </div>
 
     <div class="history-card">
-      <h3>Grafic temperatură și releu</h3>
+      <h3>Grafic temperatură (24h zoom/pan) & lumânări săptămânale</h3>
       <div class="range-buttons">
-        <button class="range-btn active" data-range="24h">Ultimele 24h</button>
-        <button class="range-btn" data-range="7d">Ultimele 7 zile</button>
-        <button class="range-btn" data-range="30d">Ultimele 30 zile</button>
+        <button class="range-btn active" data-range="24h">24h (linie)</button>
+        <button class="range-btn" data-range="7d">7 zile (candles)</button>
       </div>
+      <button id="resetZoomBtn" style="margin-bottom:10px;">Reset zoom</button>
       <canvas id="historyChart" height="260"></canvas>
       <p id="historyInfo" class="hint">Încărcare date...</p>
     </div>
