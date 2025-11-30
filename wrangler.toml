@@ -13,3 +13,8 @@ database_id = "2bdbc6cb-aca6-40a8-9e0c-76945d1be2ba"
 
 [vars]
 TOKEN = "BtC_92fA7xP14_QmZ87Lw3vS4nHk"
+
+# KV namespace for comenzi brad
+[[kv_namespaces]]
+binding = "BRAD_KV"
+id = "39de76d86bce4c1ab112adb1ed9b384e"
