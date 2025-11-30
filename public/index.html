@@ -1,72 +1,111 @@
 <!DOCTYPE html>
 <html lang="ro">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BrimTech – ESP32 Remote Control</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1" defer></script>
-  <script src="script.js" defer></script>
+  <meta charset="UTF-8">
+  <title>Control Brad 🎄</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #233, #020308);
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      text-align: center;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1.6rem;
+    }
+    p {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      color: #cbd5f5;
+    }
+    .btn-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      background: #1d4ed8;
+      color: white;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.2s;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.6);
+      background: #2563eb;
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+    .status {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: #a5b4fc;
+      min-height: 1.2em;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>BrimTech – Control ESP32</h1>
+  <div class="card">
+    <h1>Control Brad 🎄</h1>
+    <p>Controlează instalația din brad direct din browser.</p>
 
-    <div class="temp-box">
-      <h2>Temperatură actuală</h2>
-      <p id="temperature">-- °C</p>
-      <p id="lastUpdate">Ultima actualizare ESP: --</p>
+    <div class="btn-row">
+      <button onclick="sendCmd('on')">ON</button>
+      <button onclick="sendCmd('off')">OFF</button>
+      <button onclick="sendCmd('blink')">Blink</button>
+      <button onclick="sendCmd('fade')">Fade</button>
     </div>
 
-    <div class="mode-box">
-      <h2>Mod de operare</h2>
-      <button id="manualBtn" class="mode">Manual</button>
-      <button id="autoBtn" class="mode">Automat</button>
-      <p>Mod curent: <strong><span id="modeLabel">--</span></strong></p>
-    </div>
-
-    <div class="relay-box">
-      <h2>Control Releu</h2>
-      <button id="onBtn" class="on">Pornește</button>
-      <button id="offBtn" class="off">Oprește</button>
-
-      <div class="state-block">
-        <p><strong>Stare setată din browser:</strong> <span id="relaySet">--</span></p>
-        <p><small>Ultima modificare din browser: <span id="browserTime">--</span></small></p>
-      </div>
-
-      <div class="state-block">
-        <p><strong>Stare raportată de ESP:</strong> <span id="relayESP">--</span></p>
-        <p><small>Ultima actualizare de la ESP: <span id="espTime">--</span></small></p>
-      </div>
-    </div>
-
-    <div class="auto-settings">
-      <h3>Setări control automat</h3>
-      <label>Minim:
-        <input type="number" id="minTempInput" value="5" step="0.5"> °C
-      </label>
-      <label>Maxim:
-        <input type="number" id="maxTempInput" value="18" step="0.5"> °C
-      </label>
-      <button id="saveRangeBtn">Salvează interval</button>
-    </div>
-
-    <div class="history-card">
-      <h3>Grafic temperatură (24h zoom/pan) & lumânări săptămânale</h3>
-      <div class="range-buttons">
-        <button class="range-btn active" data-range="24h">24h (linie)</button>
-        <button class="range-btn" data-range="7d">7 zile (candles)</button>
-      </div>
-      <button id="resetZoomBtn" style="margin-bottom:10px;">Reset zoom</button>
-      <canvas id="historyChart" height="260"></canvas>
-      <p id="historyInfo" class="hint">Încărcare date...</p>
-    </div>
-
-    <footer>
-      <p>BrimTech Controller – Cloudflare Workers</p>
-    </footer>
+    <div class="status" id="status"></div>
   </div>
+
+  <script>
+    const WORKER_SET_URL = "https://nume-worker.tau.workers.dev/set";
+
+    async function sendCmd(cmd) {
+      const status = document.getElementById("status");
+      status.textContent = "Trimit comanda...";
+      try {
+        const res = await fetch(WORKER_SET_URL, {
+          method: "POST",
+          body: cmd
+        });
+        if (res.ok) {
+          status.textContent = `Comandă trimisă: ${cmd}`;
+        } else {
+          status.textContent = "Eroare la trimitere.";
+        }
+      } catch (e) {
+        console.error(e);
+        status.textContent = "Nu pot contacta serverul.";
+      }
+    }
+  </script>
 </body>
 </html>

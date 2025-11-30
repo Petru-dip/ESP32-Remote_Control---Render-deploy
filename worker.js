@@ -1,269 +1,51 @@
-// BrimTech Controller – Cloudflare Workers + D1
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const method = request.method;
 
-    // Favicon served inline (SVG) to avoid 500s when missing asset
-    if (path === "/favicon.ico") {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-        <defs>
-          <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stop-color="#1976d2"/>
-            <stop offset="100%" stop-color="#43a047"/>
-          </linearGradient>
-        </defs>
-        <rect width="64" height="64" rx="12" fill="#0b1a2c"/>
-        <rect x="18" y="10" width="28" height="44" rx="10" fill="url(#g)" stroke="#e3f2fd" stroke-width="3"/>
-        <line x1="32" y1="18" x2="32" y2="46" stroke="#e3f2fd" stroke-width="4" stroke-linecap="round"/>
-        <circle cx="32" cy="40" r="6" fill="#fff" stroke="#0b1a2c" stroke-width="2"/>
-        <circle cx="32" cy="40" r="3" fill="#f44336"/>
-      </svg>`;
-      return new Response(svg, {
-        status: 200,
-        headers: { "Content-Type": "image/svg+xml" }
-      });
+    const headers = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+
+    // CORS preflight
+    if (method === "OPTIONS") {
+      return new Response(null, { status: 204, headers });
     }
 
-    // 1️⃣ Static files din /public (via [assets])
-    if (!path.startsWith("/api/")) {
-      return env.ASSETS.fetch(request);
+    // --- /set = primește comanda de la site ---
+    if (method === "POST" && path === "/set") {
+      const body = await request.text();
+      const cmd = body.trim();
+
+      const allowed = ["on", "off", "blink", "fade"];
+      if (!allowed.includes(cmd)) {
+        return new Response("Invalid command", { status: 400, headers });
+      }
+
+      await env.BRAD_KV.put("CMD", cmd);
+      return new Response("OK", { status: 200, headers });
     }
 
-    // 2️⃣ TOKEN SECURITY
-    const token = url.searchParams.get("token");
-    if (token !== env.TOKEN) {
-      return json({ error: "Unauthorized" }, 401);
+    // --- /cmd = ESP32 cere ultima comandă ---
+    if (method === "GET" && path === "/cmd") {
+      const cmd = (await env.BRAD_KV.get("CMD")) || "none";
+
+      // Ștergem comanda după ce o dăm ESP-ului (opțional)
+      if (cmd !== "none") {
+        await env.BRAD_KV.delete("CMD");
+      }
+
+      return new Response(cmd, { status: 200, headers });
     }
 
-    // 3️⃣ API ROUTES (folosesc D1, nu KV)
-    if (path === "/api/update")       return updateFromESP(url, env);
-    if (path === "/api/temp")         return readStatus(env);
-    if (path === "/api/relay")        return browserSetRelay(url, env);
-    if (path === "/api/relay-state")  return espGetRelay(env);
-    if (path === "/api/mode")         return browserSetMode(url, env);
-    if (path === "/api/auto-range")   return browserSetAutoRange(url, env);
-    if (path === "/api/history")      return historyData(url, env);
+    // --- Healthcheck ---
+    if (method === "GET" && path === "/ping") {
+      return new Response("pong", { status: 200, headers });
+    }
 
-    return new Response("Not found", { status: 404 });
+    return new Response("Not found", { status: 404, headers });
   }
 };
-
-// === Helpers pentru D1 ===
-
-async function loadState(env) {
-  // un singur rând cu id = 1
-  const row = await env.DB.prepare(
-    "SELECT * FROM state WHERE id = 1"
-  ).first();
-
-  if (!row) {
-    // fallback dacă nu există încă
-    return {
-      temp: 0,
-      relay_set: "off",
-      relay_esp: "off",
-      mode: "manual",
-      min_temp: 5,
-      max_temp: 18,
-      last_esp_update: null,
-      last_browser_update: null
-    };
-  }
-  return row;
-}
-
-async function saveFromESP(env, temp, relayEsp) {
-  const now = Date.now();
-  await env.DB.prepare(
-    `UPDATE state
-       SET temp = ?, relay_esp = ?, last_esp_update = ?
-     WHERE id = 1`
-  ).bind(temp, relayEsp, now).run();
-}
-
-async function saveHistory(env, temp, relayEsp) {
-  const now = Date.now();
-  await env.DB.prepare(
-    `INSERT INTO history (ts, temp, relay)
-       VALUES (?, ?, ?)`
-  ).bind(now, temp, relayEsp).run();
-
-  // păstrăm doar ultimele 8 zile ca să nu crească fără limită
-  const retentionMs = 8 * 24 * 60 * 60 * 1000;
-  await env.DB.prepare(
-    `DELETE FROM history WHERE ts < ?`
-  ).bind(now - retentionMs).run();
-}
-
-async function saveRelaySet(env, state) {
-  const now = Date.now();
-  await env.DB.prepare(
-    `UPDATE state
-       SET relay_set = ?, last_browser_update = ?
-     WHERE id = 1`
-  ).bind(state, now).run();
-}
-
-async function saveMode(env, mode) {
-  const now = Date.now();
-  await env.DB.prepare(
-    `UPDATE state
-       SET mode = ?, last_browser_update = ?
-     WHERE id = 1`
-  ).bind(mode, now).run();
-}
-
-async function saveRange(env, minTemp, maxTemp) {
-  const now = Date.now();
-  await env.DB.prepare(
-    `UPDATE state
-       SET min_temp = ?, max_temp = ?, last_browser_update = ?
-     WHERE id = 1`
-  ).bind(minTemp, maxTemp, now).run();
-}
-
-// === API handlers ===
-
-// ESP trimite temp + starea lui de releu
-async function updateFromESP(url, env) {
-  const temp  = parseFloat(url.searchParams.get("temp") ?? "0");
-  const relay = url.searchParams.get("relay") ?? "off";
-
-  await saveFromESP(env, temp, relay);
-  await saveHistory(env, temp, relay);
-  return json({ status: "ok" });
-}
-
-// Browser citește tot statusul
-async function readStatus(env) {
-  const s = await loadState(env);
-
-  return json({
-    temp: s.temp ?? 0,
-    relaySet: s.relay_set ?? "off",
-    relayESP: s.relay_esp ?? "off",
-    mode: s.mode ?? "manual",
-    minTemp: s.min_temp ?? 5,
-    maxTemp: s.max_temp ?? 18,
-    lastEspUpdate: s.last_esp_update,
-    lastBrowserUpdate: s.last_browser_update
-  });
-}
-
-// Browser schimbă releul (setpoint)
-async function browserSetRelay(url, env) {
-  const state = url.searchParams.get("state");
-  if (state !== "on" && state !== "off") {
-    return json({ error: "Invalid state" }, 400);
-  }
-
-  await saveRelaySet(env, state);
-  return json({ relaySet: state });
-}
-
-// ESP citește ce a decis browserul
-async function espGetRelay(env) {
-  const s = await loadState(env);
-  const desired = s.relay_set || "off";
-  return new Response(desired, {
-    status: 200,
-    headers: { "Content-Type": "text/plain" }
-  });
-}
-
-// Browser schimbă mod: manual / auto
-async function browserSetMode(url, env) {
-  const mode = url.searchParams.get("value");
-  if (mode !== "manual" && mode !== "auto") {
-    return json({ error: "Invalid mode" }, 400);
-  }
-
-  await saveMode(env, mode);
-  return json({ mode });
-}
-
-// Browser setează intervalul de temperatură pentru auto
-async function browserSetAutoRange(url, env) {
-  const minTemp = parseFloat(url.searchParams.get("min") ?? "5");
-  const maxTemp = parseFloat(url.searchParams.get("max") ?? "18");
-
-  if (Number.isNaN(minTemp) || Number.isNaN(maxTemp)) {
-    return json({ error: "Missing or invalid min/max" }, 400);
-  }
-
-  await saveRange(env, minTemp, maxTemp);
-
-  return json({ minTemp, maxTemp });
-}
-
-// Istoric pentru grafice
-async function historyData(url, env) {
-  const range = url.searchParams.get("range") ?? "24h";
-
-  // 24h: puncte brute pentru zoom/pan
-  if (range === "24h") {
-    const windowStart = Date.now() - 24 * 60 * 60 * 1000;
-    const sinceParam = Number(url.searchParams.get("since"));
-    const effectiveSince = Number.isFinite(sinceParam) ? Math.max(windowStart, sinceParam) : windowStart;
-
-    const res = await env.DB.prepare(
-      `SELECT ts, temp, relay
-         FROM history
-        WHERE ts >= ?
-        ORDER BY ts ASC`
-    ).bind(effectiveSince).all();
-
-    return json({
-      range: "24h",
-      points: res?.results ?? [],
-      cutoff: windowStart,
-      incremental: Number.isFinite(sinceParam)
-    });
-  }
-
-  // 7d: agregare zilnică pentru lumânări (min/max/avg pe zi)
-  if (range === "7d") {
-    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const res = await env.DB.prepare(
-      `SELECT DATE(ts/1000, 'unixepoch', 'localtime') AS day,
-              MIN(temp) AS minTemp,
-              MAX(temp) AS maxTemp,
-              AVG(temp) AS avgTemp
-         FROM history
-        WHERE ts >= ?
-        GROUP BY day
-        ORDER BY day ASC`
-    ).bind(since).all();
-
-    // transformăm în structura necesară pentru candlestick
-    const candles = (res?.results ?? []).map((row) => ({
-      day: row.day,
-      min: row.minTemp,
-      max: row.maxTemp,
-      avg: row.avgTemp
-    }));
-
-    return json({ range: "7d", candles });
-  }
-
-  // fallback: default la 24h
-  const since = Date.now() - 24 * 60 * 60 * 1000;
-  const res = await env.DB.prepare(
-    `SELECT ts, temp, relay
-       FROM history
-      WHERE ts >= ?
-      ORDER BY ts ASC`
-  ).bind(since).all();
-
-  return json({ range: "24h", points: res?.results ?? [] });
-}
-
-// helper JSON
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json" }
-  });
-}
