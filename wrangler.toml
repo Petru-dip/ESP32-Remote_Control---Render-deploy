@@ -1,4 +1,4 @@
-name = "brimtech-controller"
+name = "christmas-tree"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
@@ -9,7 +9,7 @@ directory = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "brimtech_controller"
-database_id = "2bdbc6cb-aca6-40a8-9e0c-76945d1be2ba"
+database_id = "6c201d6b-f0dc-4591-8bff-163b98fd05e5"
 
 [vars]
 TOKEN = "BtC_92fA7xP14_QmZ87Lw3vS4nHk"
@@ -17,4 +17,4 @@ TOKEN = "BtC_92fA7xP14_QmZ87Lw3vS4nHk"
 # KV namespace for comenzi brad
 [[kv_namespaces]]
 binding = "BRAD_KV"
-id = "39de76d86bce4c1ab112adb1ed9b384e"
+id = "04b4e5fbaaa54a6e94d56d761e1362fa"

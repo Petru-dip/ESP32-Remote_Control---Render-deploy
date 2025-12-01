@@ -6,8 +6,9 @@ const char* ssid     = "NUMELE_WIFI";
 const char* password = "PAROLA_WIFI";
 
 // Worker endpoints
-const char* WORKER_CMD_URL = "https://nume-worker.tau.workers.dev/cmd";
-const char* WORKER_PING_URL = "https://nume-worker.tau.workers.dev/ping"; // optional
+const char* WORKER_CMD_URL = "https://christmas-tree.christmas-tree.workers.dev/cmd";
+const char* WORKER_PING_URL = "https://christmas-tree.christmas-tree.workers.dev/ping"; // optional
+const char* WORKER_STATE_URL = "https://christmas-tree.christmas-tree.workers.dev/state";
 
 // Pin pentru releu / MOSFET / instalație
 #define LIGHT_PIN 5
@@ -20,6 +21,8 @@ const unsigned long POLL_INTERVAL = 2000;
 String currentMode = "off";
 unsigned long lastEffectToggle = 0;
 bool effectState = false;
+
+void sendState(const String& mode, int intensity);
 
 void setup() {
   Serial.begin(115200);
@@ -99,15 +102,19 @@ void applyCommand(const String& cmd) {
   if (cmd == "on") {
     currentMode = "on";
     digitalWrite(LIGHT_PIN, HIGH);
+    sendState("on", 255);
   } else if (cmd == "off") {
     currentMode = "off";
     digitalWrite(LIGHT_PIN, LOW);
+    sendState("off", 0);
   } else if (cmd == "blink") {
     currentMode = "blink";
     lastEffectToggle = millis();
+    sendState("blink", 255);
   } else if (cmd == "fade") {
     currentMode = "fade";
     lastEffectToggle = millis();
+    sendState("fade", 255);
   } else {
     Serial.println("Unknown command");
   }
@@ -146,4 +153,18 @@ void handleEffects() {
       ledcWrite(0, brightness);
     }
   }
+}
+
+// Trimite starea curentă la worker pentru afișare în UI
+void sendState(const String& mode, int intensity) {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  http.begin(WORKER_STATE_URL);
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = "{\"mode\":\"" + mode + "\",\"intensity\":" + String(intensity) + "}";
+  int code = http.POST(payload);
+  Serial.print("POST /state => "); Serial.println(code);
+  http.end();
 }
