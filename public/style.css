@@ -15,7 +15,7 @@ body {
   background: rgba(15, 23, 42, 0.9);
   border-radius: 16px;
   padding: 24px;
-  max-width: 360px;
+  max-width: 420px;
   width: 100%;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   text-align: center;
@@ -24,7 +24,7 @@ body {
 h1 {
   margin-top: 0;
   margin-bottom: 8px;
-  font-size: 1.6rem;
+  font-size: 1.8rem;
 }
 
 p {
@@ -34,22 +34,47 @@ p {
   color: #cbd5f5;
 }
 
+.led-section {
+  border-radius: 12px;
+  padding: 12px 12px 16px;
+  background: rgba(15, 23, 42, 0.8);
+  margin-top: 16px;
+  text-align: left;
+}
+
+.led-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.led-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.led-state-text {
+  font-size: 0.8rem;
+  color: #a5b4fc;
+}
+
 .btn-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-top: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
 }
 
 button {
   border: none;
   border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 0.95rem;
+  padding: 8px 12px;
+  font-size: 0.9rem;
   cursor: pointer;
   background: #1d4ed8;
   color: white;
-  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.2s;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.2s, opacity 0.2s;
 }
 
 button:hover {
@@ -63,9 +88,57 @@ button:active {
   box-shadow: none;
 }
 
-.status {
-  margin-top: 12px;
+button.mode-active {
+  background: #22c55e;
+}
+
+.slider-row {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slider-row label {
+  font-size: 0.8rem;
+  color: #cbd5f5;
+  display: flex;
+  justify-content: space-between;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+.program-row {
+  margin-top: 16px;
+  text-align: left;
   font-size: 0.85rem;
+}
+
+.program-row label {
+  display: block;
+  margin-bottom: 4px;
+  color: #cbd5f5;
+}
+
+.program-row select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: none;
+  background: #020617;
+  color: #e5e7eb;
+}
+
+.apply-btn {
+  margin-top: 16px;
+  width: 100%;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 0.8rem;
   color: #a5b4fc;
   min-height: 1.2em;
 }
