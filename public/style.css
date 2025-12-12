@@ -15,7 +15,7 @@ body {
   background: rgba(15, 23, 42, 0.9);
   border-radius: 16px;
   padding: 24px;
-  max-width: 420px;
+  max-width: 520px;
   width: 100%;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   text-align: center;
@@ -27,11 +27,17 @@ h1 {
   font-size: 1.8rem;
 }
 
+h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
 p {
   margin-top: 0;
   margin-bottom: 16px;
   font-size: 0.95rem;
   color: #cbd5f5;
+  line-height: 1.4;
 }
 
 .led-section {
@@ -47,11 +53,6 @@ p {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-}
-
-.led-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
 }
 
 .led-state-text {
@@ -110,25 +111,33 @@ input[type="range"] {
   width: 100%;
 }
 
-.program-row {
+.program-row,
+.playlist-section,
+.schedule-section,
+.history-section {
   margin-top: 16px;
   text-align: left;
   font-size: 0.85rem;
 }
 
-.program-row label {
+.program-row label,
+.schedule-row label {
   display: block;
   margin-bottom: 4px;
   color: #cbd5f5;
 }
 
-.program-row select {
+.program-row select,
+.schedule-row select,
+.schedule-row input,
+.playlist-section select {
   width: 100%;
   padding: 6px 8px;
   border-radius: 999px;
   border: none;
   background: #020617;
   color: #e5e7eb;
+  margin-bottom: 8px;
 }
 
 .apply-btn {
@@ -141,4 +150,17 @@ input[type="range"] {
   font-size: 0.8rem;
   color: #a5b4fc;
   min-height: 1.2em;
+}
+
+#history-canvas {
+  margin-top: 10px;
+  width: 100%;
+  border-radius: 8px;
+  background: #020617;
+}
+
+#stats {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #e5e7eb;
 }

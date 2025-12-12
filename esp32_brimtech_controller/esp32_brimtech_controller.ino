@@ -9,13 +9,15 @@ const char* password = "21580260";
 const char* WORKER_CMD_URL   = "https://christmas-tree.christmas-tree.workers.dev/cmd";
 const char* WORKER_STATE_URL = "https://christmas-tree.christmas-tree.workers.dev/state";
 
-// LED pins
+// LED pins (ESP32-C3 Mini)
 #define LED1_PIN 2
-#define LED2_PIN 3
+#define LED2_PIN 8
+#define LED3_PIN 10
 
 // PWM channels
 const int CH1 = 0;
 const int CH2 = 1;
+const int CH3 = 2;
 
 unsigned long lastPoll = 0;
 const unsigned long POLL_INTERVAL = 2000;
@@ -31,9 +33,10 @@ struct LedState {
   int fadeStep;      // pentru fade
 };
 
-LedState led1, led2;
+LedState led1, led2, led3;
 unsigned long lastEffect1 = 0;
 unsigned long lastEffect2 = 0;
+unsigned long lastEffect3 = 0;
 
 // ---------------- PROTO ----------------
 void connectWiFi();
@@ -44,6 +47,7 @@ void applyLedImmediate(LedState& led, int channel);
 void handleEffects();
 void handleLedEffect(LedState& led, int channel, unsigned long now, unsigned long &lastTs);
 void sendState();
+void resetLedState(LedState& led);
 
 // ---------------- SETUP ----------------
 void setup() {
@@ -51,19 +55,24 @@ void setup() {
 
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
+  pinMode(LED3_PIN, OUTPUT);
 
   digitalWrite(LED1_PIN, LOW);
   digitalWrite(LED2_PIN, LOW);
+  digitalWrite(LED3_PIN, LOW);
 
   ledcSetup(CH1, 5000, 8);
   ledcSetup(CH2, 5000, 8);
+  ledcSetup(CH3, 5000, 8);
 
   ledcAttachPin(LED1_PIN, CH1);
   ledcAttachPin(LED2_PIN, CH2);
+  ledcAttachPin(LED3_PIN, CH3);
 
-  // stări inițiale
-  led1.mode = "off"; led1.intensity = 0; led1.blinkState = false; led1.fadeVal = 0; led1.fadeStep = 4;
-  led2.mode = "off"; led2.intensity = 0; led2.blinkState = false; led2.fadeVal = 0; led2.fadeStep = 4;
+  // stari initiale
+  resetLedState(led1);
+  resetLedState(led2);
+  resetLedState(led3);
 
   connectWiFi();
 }
@@ -132,10 +141,20 @@ void checkForCommand() {
   http.end();
 }
 
-// Format commandă: L1:mode:int;L2:mode:int;P:program
-// ex: L1:blink:255;L2:fade:128;P:none
+// Format comanda (3 LED-uri): L1:mode:int;L2:mode:int;L3:mode:int;P:program
+// ex: L1:on:200;L2:fade:150;L3:blink:255;P:none
 void parseAndApplyCommand(const String& cmd) {
   String work = cmd;
+
+  auto applyToLed = [](LedState& led, int intensity, const String& mode, unsigned long& lastTs, int channel) {
+    led.mode = mode;
+    led.intensity = intensity;
+    led.blinkState = false;
+    led.fadeVal = 0;
+    led.fadeStep = 4;
+    lastTs = millis();
+    applyLedImmediate(led, channel);
+  };
 
   while (work.length() > 0) {
     int sep = work.indexOf(';');
@@ -150,7 +169,7 @@ void parseAndApplyCommand(const String& cmd) {
     part.trim();
     if (part.length() == 0) continue;
 
-    if (part.startsWith("L1:")) {
+    if (part.startsWith("L1:") || part.startsWith("L2:") || part.startsWith("L3:")) {
       int first = part.indexOf(':');
       int second = part.indexOf(':', first + 1);
       String mode = (second == -1) ? part.substring(first + 1)
@@ -163,34 +182,13 @@ void parseAndApplyCommand(const String& cmd) {
         if (intensity > 255) intensity = 255;
       }
 
-      led1.mode = mode;
-      led1.intensity = intensity;
-      led1.blinkState = false;
-      led1.fadeVal = 0;
-      led1.fadeStep = 4;
-      lastEffect1 = millis();
-      applyLedImmediate(led1, CH1);
-
-    } else if (part.startsWith("L2:")) {
-      int first = part.indexOf(':');
-      int second = part.indexOf(':', first + 1);
-      String mode = (second == -1) ? part.substring(first + 1)
-                                   : part.substring(first + 1, second);
-      mode.trim();
-      int intensity = 255;
-      if (second != -1) {
-        intensity = part.substring(second + 1).toInt();
-        if (intensity < 0) intensity = 0;
-        if (intensity > 255) intensity = 255;
+      if (part.startsWith("L1:")) {
+        applyToLed(led1, intensity, mode, lastEffect1, CH1);
+      } else if (part.startsWith("L2:")) {
+        applyToLed(led2, intensity, mode, lastEffect2, CH2);
+      } else if (part.startsWith("L3:")) {
+        applyToLed(led3, intensity, mode, lastEffect3, CH3);
       }
-
-      led2.mode = mode;
-      led2.intensity = intensity;
-      led2.blinkState = false;
-      led2.fadeVal = 0;
-      led2.fadeStep = 4;
-      lastEffect2 = millis();
-      applyLedImmediate(led2, CH2);
 
     } else if (part.startsWith("P:")) {
       String p = part.substring(2);
@@ -207,7 +205,11 @@ void parseAndApplyCommand(const String& cmd) {
   Serial.print(" | L2 mode=");
   Serial.print(led2.mode);
   Serial.print(" int=");
-  Serial.println(led2.intensity);
+  Serial.print(led2.intensity);
+  Serial.print(" | L3 mode=");
+  Serial.print(led3.mode);
+  Serial.print(" int=");
+  Serial.println(led3.intensity);
 }
 
 void applyLedImmediate(LedState& led, int channel) {
@@ -216,27 +218,28 @@ void applyLedImmediate(LedState& led, int channel) {
   } else if (led.mode == "on") {
     ledcWrite(channel, led.intensity);
   }
-  // pentru moduri cu efect (blink/fade/sparkle), handleEffects se ocupă
+  // pentru moduri cu efect (blink/fade/sparkle), handleEffects se ocupa
 }
 
 // ---------------- EFECTE ----------------
 void handleEffects() {
   unsigned long now = millis();
 
-  // dacă programMode vrei să facă ceva global (ex: "alternate"), îl poți
-  // trata aici. Momentan doar "none" = folosește modurile per-LED.
+  // daca programMode vrei sa faca ceva global (ex: "alternate"), se poate trata aici.
   if (programMode == "none") {
     handleLedEffect(led1, CH1, now, lastEffect1);
     handleLedEffect(led2, CH2, now, lastEffect2);
+    handleLedEffect(led3, CH3, now, lastEffect3);
   } else if (programMode == "alternate") {
-    // exemplu de program simplu: LED1 și LED2 alternează
-    static bool altState = false;
+    // simplu: aprindem pe rand LED1, LED2, LED3
+    static int altState = 0;
     static unsigned long lastAlt = 0;
     if (now - lastAlt >= 500) {
       lastAlt = now;
-      altState = !altState;
-      ledcWrite(CH1, altState ? 255 : 0);
-      ledcWrite(CH2, altState ? 0 : 255);
+      altState = (altState + 1) % 3;
+      ledcWrite(CH1, altState == 0 ? 255 : 0);
+      ledcWrite(CH2, altState == 1 ? 255 : 0);
+      ledcWrite(CH3, altState == 2 ? 255 : 0);
     }
   }
 }
@@ -278,7 +281,7 @@ void handleLedEffect(LedState& led, int channel, unsigned long now, unsigned lon
     return;
   }
 
-  // SPARKLE – „scântei” random
+  // SPARKLE - intensitate random
   if (led.mode == "sparkle") {
     if (now - lastTs >= 80) {
       lastTs = now;
@@ -306,6 +309,8 @@ void sendState() {
   payload += "\"led1_intensity\":" + String(led1.intensity) + ",";
   payload += "\"led2_mode\":\"" + led2.mode + "\",";
   payload += "\"led2_intensity\":" + String(led2.intensity) + ",";
+  payload += "\"led3_mode\":\"" + led3.mode + "\",";
+  payload += "\"led3_intensity\":" + String(led3.intensity) + ",";
   payload += "\"program\":\"" + programMode + "\"";
   payload += "}";
 
@@ -313,4 +318,12 @@ void sendState() {
   Serial.print("POST /state => ");
   Serial.println(code);
   http.end();
+}
+
+void resetLedState(LedState& led) {
+  led.mode = "off";
+  led.intensity = 0;
+  led.blinkState = false;
+  led.fadeVal = 0;
+  led.fadeStep = 4;
 }

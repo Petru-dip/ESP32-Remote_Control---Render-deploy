@@ -2,19 +2,21 @@
 <html lang="ro">
 <head>
   <meta charset="UTF-8">
-  <title>Control Brad 🎄</title>
+  <title>Control Brad - 3 LED-uri</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div class="card">
-    <h1>Control Brad 🎄</h1>
-    <p>Controlează instalația din brad (2 LED-uri) cu moduri diferite de lumini.</p>
 
+    <h1>Control Brad</h1>
+    <p>Controleaza 3 LED-uri, vizualizeaza istoricul, playlist-uri si programari.</p>
+
+    <!-- CONTROL LED 1 -->
     <div class="led-section">
       <div class="led-header">
         <h2>LED 1</h2>
-        <span id="led1-state" class="led-state-text">–</span>
+        <span id="led1-state" class="led-state-text">-</span>
       </div>
       <div class="btn-row">
         <button data-led="1" data-mode="off">Off</button>
@@ -31,10 +33,11 @@
       </div>
     </div>
 
+    <!-- CONTROL LED 2 -->
     <div class="led-section">
       <div class="led-header">
         <h2>LED 2</h2>
-        <span id="led2-state" class="led-state-text">–</span>
+        <span id="led2-state" class="led-state-text">-</span>
       </div>
       <div class="btn-row">
         <button data-led="2" data-mode="off">Off</button>
@@ -51,15 +54,79 @@
       </div>
     </div>
 
+    <!-- CONTROL LED 3 -->
+    <div class="led-section">
+      <div class="led-header">
+        <h2>LED 3</h2>
+        <span id="led3-state" class="led-state-text">-</span>
+      </div>
+      <div class="btn-row">
+        <button data-led="3" data-mode="off">Off</button>
+        <button data-led="3" data-mode="on">On</button>
+        <button data-led="3" data-mode="blink">Blink</button>
+        <button data-led="3" data-mode="fade">Fade</button>
+        <button data-led="3" data-mode="sparkle">Sparkle</button>
+      </div>
+      <div class="slider-row">
+        <label for="led3-intensity">
+          Intensitate: <span id="led3-intensity-label">255</span>
+        </label>
+        <input type="range" id="led3-intensity" min="0" max="255" value="255">
+      </div>
+    </div>
+
+    <!-- PROGRAM GLOBAL SIMPLU -->
     <div class="program-row">
-      <label for="program-select">Program global (opțional)</label>
+      <label for="program-select">Program global (mod logic in ESP)</label>
       <select id="program-select">
         <option value="none">Niciun program</option>
-        <option value="alternate">Alternare LED1 / LED2</option>
+        <option value="alternate">Alternare LED1 / LED2 / LED3</option>
       </select>
     </div>
 
     <button class="apply-btn" id="apply-btn">Trimite configurarea</button>
+
+    <!-- PLAYLIST-uri -->
+    <div class="playlist-section">
+      <h2>Playlist-uri automate</h2>
+      <p>Alege un playlist - Worker programeaza automat pasii in timp.</p>
+      <select id="playlist-select">
+        <option value="">Alege un playlist</option>
+        <option value="party">Party (blink + fade + sparkle)</option>
+        <option value="calm">Calm (fade soft)</option>
+        <option value="crazy">Crazy (sparkle random)</option>
+      </select>
+      <button id="playlist-start-btn">Porneste playlist</button>
+    </div>
+
+    <!-- PROGRAMARE PE ORE -->
+    <div class="schedule-section">
+      <h2>Programare pe ore</h2>
+      <p>Alege o ora la care sa porneasca un mod (ex: blink) automat pe toate LED-urile.</p>
+      <div class="schedule-row">
+        <label for="time-input">Ora (HH:MM, azi):</label>
+        <input type="time" id="time-input">
+      </div>
+      <div class="schedule-row">
+        <label for="schedule-mode-select">Mod pentru toate LED-urile:</label>
+        <select id="schedule-mode-select">
+          <option value="on">On</option>
+          <option value="off">Off</option>
+          <option value="blink">Blink</option>
+          <option value="fade">Fade</option>
+          <option value="sparkle">Sparkle</option>
+        </select>
+      </div>
+      <button id="schedule-set-btn">Programeaza</button>
+    </div>
+
+    <!-- ISTORIC + FILTRE -->
+    <div class="history-section">
+      <h2>Istoric & statistici</h2>
+      <button id="history-refresh-btn">Reincarc istoric</button>
+      <canvas id="history-canvas" width="360" height="150"></canvas>
+      <div id="stats"></div>
+    </div>
 
     <div class="status" id="status"></div>
     <div class="status" id="esp-state"></div>
